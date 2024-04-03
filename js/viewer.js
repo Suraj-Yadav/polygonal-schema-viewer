@@ -9,8 +9,8 @@ import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometr
 import Simulation from './simulation.js';
 
 
-const GRID_X = 10;
-const GRID_Y = 10;
+const GRID_X = 40;
+const GRID_Y = 40;
 
 class Viewer {
 
@@ -232,12 +232,8 @@ class Viewer {
             const N = pos.count;
             let i = 0;
             for (const node of this.sim.nodes) {
-                if (i == 0) {
-                    console.log(node);
-                }
                 pos.setXYZ(i++, node.x, node.y, node.z);
             }
-            console.log(i, N);
             pos.needsUpdate = true;
             this.geometry.computeBoundingBox();
             this.lookAtMesh();

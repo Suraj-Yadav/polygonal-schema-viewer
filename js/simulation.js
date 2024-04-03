@@ -56,6 +56,11 @@ class Simulation {
                 links.push({ source: u, target: v });
             }
         }
+        const seams = [];
+        for (let u = 0; u <= this.GRID_X; u++) {
+            const v = u + (this.GRID_X + 1) * this.GRID_Y;
+            seams.push({ source: u, target: v });
+        }
         this.nodes = Array.from({ length: N }, (_, i) => {
             const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
             return { index: i, x, y, z };
@@ -65,12 +70,15 @@ class Simulation {
         this.sim.on('tick', () => { /* console.log(Date.now()); */ this.cb(); });
 
         if (enableSeams) {
-            // this.sim.force("rad", d3Force3D.forceRadial(1).strength(0.1))
             // this.sim.force("center", d3Force3D.forceCenter(0, 0, 0));
         }
-        this.sim.force("charge", d3Force3D.forceManyBody().strength(-0.01));
+        // this.sim.force("rad", d3Force3D.forceRadial(1).strength(0.01));
+        this.sim.force("charge", d3Force3D.forceManyBody().strength(-1));
         this.sim.force("links", d3Force3D.forceLink(links).distance((l) => {
             return this.adjList[l.source.index][l.target.index].dist;
+        }).strength(1));
+        this.sim.force("seams", d3Force3D.forceLink(seams).distance((l) => {
+            return 0;
         }).strength(1));
     }
 
@@ -84,10 +92,11 @@ class Simulation {
         if (this.adjList[a][b]) {
             return;
         }
-        // const thresh = 100 / (this.GRID_X * this.GRID_X) + 100 / (this.GRID_Y * this.GRID_Y);
-        // if (va.distanceToSquared(vb) > thresh && !repel) {
-        //     return;
-        // }
+        const thresh = 100 / (this.GRID_X * this.GRID_X) + 100 / (this.GRID_Y * this.GRID_Y);
+        if (va.distanceToSquared(vb) >= thresh) {
+            console.log(va.distanceToSquared(vb), thresh);
+            return;
+        }
         if (repel) {
             // this.repelAdjList[a][b] = { dist: 2 * va.distanceTo(vb), repel };
             // this.repelAdjList[b][a] = { dist: 2 * va.distanceTo(vb), repel };

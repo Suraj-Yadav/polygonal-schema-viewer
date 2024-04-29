@@ -1,5 +1,6 @@
 import WebGL from 'three/addons/capabilities/WebGL.js';
-import Viewer from './viewer.js';
+import Viewer from './viewer';
+import UnionFind from './unionfind'
 
 if (!WebGL.isWebGLAvailable()) {
     // Initiate function or other initializations here 
@@ -7,13 +8,12 @@ if (!WebGL.isWebGLAvailable()) {
     alert(warning.textContent);
 }
 
+
 const viewer = new Viewer('c');
 
-window.onresize = () => {
-    viewer.resized();
-};
+window.onresize = () => { viewer.resized(); };
 
-const uploadInput = document.getElementById("uploadInput");
+const uploadInput = document.getElementById("uploadInput") as HTMLInputElement;
 uploadInput.addEventListener(
     "change",
     () => {
@@ -25,7 +25,3 @@ uploadInput.addEventListener(
     },
     false,
 );
-
-document.getElementById('loadPlane').onclick = () => { viewer.loadPlane(); }
-document.getElementById('magnetize').onclick = () => { viewer.joinSeam(true); }
-document.getElementById('volume').onchange = () => { viewer.joinSeam(false); }

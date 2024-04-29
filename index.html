@@ -2,8 +2,8 @@
 <html lang="en">
 
 <head>
-  <meta charset="utf-8">
-  <title>My first three.js app</title>
+  <meta charset="UTF-8">
+  <title>Untitled</title>
   <style>
     html,
     body {
@@ -17,34 +17,12 @@
       display: block;
     }
   </style>
-  <!-- <script type="importmap">
-        {
-          "imports": {
-            "ngraph":"https://unpkg.com/ngraph.graph@20.0.1/dist/ngraph.graph.min.js",
-            "three": "https://unpkg.com/three@0.161.0/build/three.module.min.js",
-            "three/addons/": "https://unpkg.com/three@0.161.0/examples/jsm/"
-            "d3-force-3d":"https://cdn.skypack.dev/d3-force-3d",
-          }
-        }
-      </script> -->
-  <script type="importmap">
-        { "imports": {
-            "d3-force-3d":"https://cdn.skypack.dev/d3-force-3d",
-            "three": "/node_modules/three/build/three.module.min.js",
-            "three/addons/": "/node_modules/three/examples/jsm/"
-          }
-        }
-      </script>
 </head>
 
-
 <body>
-  <input id="uploadInput" type="file" accept=".obj" />
-  <button id="loadPlane">Load Plane</button>
-  <button id="magnetize">Magnetize</button>
-  <input type="range" id="volume" name="volume" min="0" max="2" step="0.1" />
-  <canvas id="c"></canvas>
-  <script type="module" src="/js/main.js"></script>
+  <input id="uploadInput" type="file" accept=".obj, .ply" style="position: absolute;left: -100em;" />
+  <div id="container" style="width: 100vw;height: 100vh;"><canvas id="c"></canvas></div>
+  <script type="module" src="/ts/main.ts"></script>
 </body>
 
 </html>

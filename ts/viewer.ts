@@ -6,18 +6,22 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import GUI from 'lil-gui';
+import { GUI } from 'lil-gui';
 
 import Simulation from './simulation';
 import compute_betti from './betti';
+import { Queue } from 'typescript-collections';
+
 import { Vector3 } from 'three';
 
-const GRID_X = 2;
-const GRID_Y = 2;
+const GRID_X = 10;
+const GRID_Y = 10;
 const GRID_SIZE = 10;
 
 const HANDLE_MAT = new THREE.MeshBasicMaterial({ color: 0xff0000 });
 const SURFACE_MAT = new THREE.MeshPhysicalMaterial({ color: 0x44aa88 });
+const SEAM_MAT = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+SEAM_MAT.side = THREE.DoubleSide;
 SURFACE_MAT.side = THREE.DoubleSide;
 SURFACE_MAT.transparent = true;
 SURFACE_MAT.depthTest = true;
@@ -46,12 +50,16 @@ class Viewer {
     handles: Array<THREE.Mesh>;
     sim?: Simulation;
     geometry: THREE.BufferGeometry;
+    seamGeometry: THREE.BufferGeometry;
     surfaceMesh: THREE.Mesh;
     wireMesh: THREE.Mesh;
+    seamMesh: THREE.Mesh;
     dragControls: DragControls;
     viewHandles: boolean;
     viewIndices: boolean;
     gui: GUI;
+    enableClick: boolean;
+    seam: Array<number>;
 
 
     constructor(canvasId: string) {
@@ -89,19 +97,23 @@ class Viewer {
 
         this.gui = new GUI();
 
+        this.seam = [0, 10, 110, 120];
+
         const guiStuff = {
             'Continue Simulation': () => { this?.sim?.updateSim(); },
             'Load Model': () => { document.getElementById("uploadInput").click(); },
-            'Grid X': GRID_X,
-            'Grid Y': GRID_Y,
-            'Load Plane': () => { this.loadPlane(guiStuff['Grid X'], guiStuff['Grid Y']); },
+            'Width': GRID_X,
+            'Height': GRID_Y,
+            'Load Plane': () => { this.loadPlane(guiStuff['Width'], guiStuff['Height']); },
             'Betti Numbers': '',
+            'Seam': this.seam.toString(),
             'Compute Betti Numbers': () => {
                 guiStuff['Betti Numbers'] = compute_betti(this.geometry);
                 for (const c of this.gui.controllersRecursive()) {
                     c.updateDisplay();
                 }
-            }
+            },
+            'Add Seam': () => { this.#addSeam(); }
         };
 
         this.gui.add(guiStuff, 'Continue Simulation');
@@ -110,12 +122,17 @@ class Viewer {
         this.gui.add(WIRE_MAT, 'wireframe').onChange(() => { this.render(); });
         this.gui.add(SURFACE_MAT, 'opacity', 0, 1).onChange(() => { this.render(); })
         this.gui.add(guiStuff, 'Load Model');
-        const folder = this.gui.addFolder('Plane');
-        folder.add(guiStuff, 'Grid X', 2, 20, 1);
-        folder.add(guiStuff, 'Grid Y', 2, 20, 1);
+        let folder = this.gui.addFolder('Plane');
+        folder.add(guiStuff, 'Width', 1, 40, 1);
+        folder.add(guiStuff, 'Height', 1, 40, 1);
         folder.add(guiStuff, 'Load Plane');
         this.gui.add(guiStuff, 'Betti Numbers').disable();
         this.gui.add(guiStuff, 'Compute Betti Numbers');
+
+        folder = this.gui.addFolder('Seams');
+
+        folder.add(guiStuff, 'Seam').disable();
+        folder.add(guiStuff, 'Add Seam');
 
         {
 
@@ -127,8 +144,38 @@ class Viewer {
 
         }
 
+        window.addEventListener('keydown', (e) => { this.enableClick = e.ctrlKey; })
+        window.addEventListener('keyup', (e) => { this.enableClick = e.ctrlKey; })
 
         this.loadPlane();
+    }
+
+    #addSeam() {
+        if (this.seam.length < 4) {
+            alert('Need to select 4 Handles');
+            return;
+        }
+        const { path1, path2, err } = this.sim?.addSeam(this.seam[0], this.seam[1], this.seam[2], this.seam[3]);
+        if (err) {
+            alert(err);
+            return;
+        }
+        const indices = [...this.seamGeometry?.index.array];
+        // console.log(indices);
+
+        for (let i = 1; i < path1.length; i++) {
+            const a = path1[i - 1], b = path1[i];
+            const x = path2[i - 1], y = path2[i];
+            indices.push(a, b, x);
+            indices.push(b, x, y);
+        }
+        this.seamGeometry.setIndex(indices);
+        this.seamGeometry.getIndex().needsUpdate = true;
+
+
+        this.scene.remove(this.seamMesh);
+        this.seamMesh = new THREE.Mesh(this.seamGeometry, SEAM_MAT);
+        this.scene.add(this.seamMesh);
     }
 
     toggleVisibility(showHandles = false, showIndices = false, forceUpdate = false) {
@@ -174,22 +221,27 @@ class Viewer {
                 this.dragControls.addEventListener('drag', (e) => { this.drag(e); })
                 this.dragControls.addEventListener('dragstart', (e) => { this.drag(e); this.orbitControls.enabled = false; })
                 this.dragControls.addEventListener('dragend', (e) => { this.drag(e); this.orbitControls.enabled = true; })
+                this.scaleHandles();
             }
-            this.scaleHandles();
         }
         this.render();
+        for (const c of this.gui.controllersRecursive()) {
+            c.updateDisplay();
+        }
     }
 
-    loadPlane(gridX: number = GRID_X, gridY: number = GRID_Y) {
-        this.load(new THREE.PlaneGeometry(GRID_SIZE, GRID_SIZE, gridX, gridY), GRID_SIZE * GRID_SIZE / (gridX * gridX) + GRID_SIZE * GRID_SIZE / (gridX * gridX));
+    loadPlane(width: number = GRID_X, height: number = GRID_Y) {
+        this.load(new THREE.PlaneGeometry(width, height, width, height), 2);
+        for (const elem of this.gui.foldersRecursive()) {
+            if (elem.$title.textContent === 'Seams') {
+                elem.open();
+            }
+        }
     }
 
     joinSeam() { this.sim.updateSim(); }
 
     load(geometry: THREE.BufferGeometry, thresh: number = Infinity) {
-        if (this.geometry) {
-            this.geometry.dispose();
-        }
         {
             const center = new THREE.Vector3();
             const matrix = new THREE.Matrix4();
@@ -203,23 +255,35 @@ class Viewer {
             geometry.boundingBox.getSize(center);
             const scale = GRID_SIZE / Math.max(center.x, center.y, center.z);
 
+
             matrix.makeScale(scale, scale, scale);
             geometry.applyMatrix4(matrix);
+
+            thresh *= scale * scale;
         }
+        this.geometry?.dispose();
         this.geometry = geometry;
         this.geometry.computeVertexNormals();
         this.scene.remove(this.surfaceMesh);
         this.scene.remove(this.wireMesh);
+        this.scene.remove(this.seamMesh);
         this.surfaceMesh = new THREE.Mesh(this.geometry, SURFACE_MAT);
         this.wireMesh = new THREE.Mesh(this.geometry, WIRE_MAT);
+        this.seamMesh = new THREE.Mesh(this.seamGeometry, SEAM_MAT);
 
         this.scene.add(this.surfaceMesh);
         this.scene.add(this.wireMesh);
+        this.scene.add(this.seamMesh);
 
         this.lookAtMesh();
 
         this.sim?.dispose();
         this.sim = new Simulation(geometry, (e) => { this.update_pos_batch(e); this.render(); }, thresh);
+
+        this.seamGeometry?.dispose();
+        this.seamGeometry = new THREE.BufferGeometry();
+        this.seamGeometry.setAttribute('position', geometry.getAttribute('position'));
+        this.seamGeometry.setIndex([]);
 
         this.resized();
         this.render();
@@ -258,6 +322,11 @@ class Viewer {
                 r = Viewer.extractGeometry(r);
             }
             this.load(r);
+            for (const elem of this.gui.foldersRecursive()) {
+                if (elem.$title.textContent === 'Seams') {
+                    elem.close();
+                }
+            }
         }
         if (path.endsWith('.obj')) {
             this.objLoader.load(url, (e) => handler(e, null), null, (e) => handler(null, e));
@@ -332,10 +401,19 @@ class Viewer {
         this.render();
     }
 
-    // /**
-    //  * @param {{type:string, object:THREE.Mesh}} param0 
-    //  */
-    drag(event: { type: string, object: THREE.Mesh }) {
+    drag(event) {
+        if (this.enableClick) {
+            if (event.type === 'dragend') {
+                this.seam.push(event.object.userData.index);
+                if (this.seam.length > 4) { this.seam.shift(); }
+                for (const elem of this.gui.controllersRecursive()) {
+                    if (elem.property == 'Seam') {
+                        elem.setValue(this.seam.toString());
+                    }
+                }
+            }
+            return;
+        }
         const idx = event.object.userData.index as number;
         this.update_pos(idx, event.object.position);
         if (this.labels.length > idx) {
@@ -343,7 +421,6 @@ class Viewer {
         }
         this.render();
         if (event.type == 'dragend') { this?.sim?.updateSim(); }
-        // if (event.type == 'dragstart') { this.sim?.sim?.alphaTarget(0.3).restart(); }
         if (event.type == 'dragstart') { this.sim?.stop(); }
     }
 
@@ -395,6 +472,7 @@ class Viewer {
             }
 
         }
+
         pos.needsUpdate = true;
         this.geometry.computeBoundingBox();
         this.lookAtMesh();

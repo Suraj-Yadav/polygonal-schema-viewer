@@ -62,6 +62,17 @@ class UnionFind<Type> {
 
     cc_count() { return this.cc; }
 
+    print() {
+        const groups = new Map<number, string[]>();
+        for (const [k, kk] of this.mapping) {
+            if (groups.has(this.#find(kk))) {
+                groups.get(this.#find(kk)).push(k);
+            } else {
+                groups.set(this.#find(kk), [k]);
+            }
+        }
+        console.log(groups);
+    }
 };
 
 export default UnionFind;

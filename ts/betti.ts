@@ -111,8 +111,8 @@ function compute_betti(geometry: THREE.BufferGeometry) {
     for (const { edge: e, p: ws } of Array.from(edges.values())) {
         v.union(e[0], e[1]);
         if (ws.length == 1) {
-            const a: FaceExt = [e[0], e[1], ws[0], 1];
-            const b: FaceExt = [e[0], e[1], ws[0], -1];
+            const a: FaceExt = [...id([e[0], e[1], ws[0]]), 1];
+            const b: FaceExt = [...id([e[0], e[1], ws[0]]), -1];
             m.union(a, b);
         } else {
             for (let i = 1; i <= ws.length; i++) {

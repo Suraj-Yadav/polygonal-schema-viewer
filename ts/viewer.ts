@@ -22,6 +22,7 @@ const HANDLE_MAT = new THREE.MeshBasicMaterial({ color: 0xff0000 });
 const SURFACE_MAT = new THREE.MeshPhysicalMaterial({ color: 0x44aa88 });
 const SEAM_MAT = new THREE.MeshBasicMaterial({ color: 0x0000ff });
 SEAM_MAT.side = THREE.DoubleSide;
+SEAM_MAT.transparent = true;
 SURFACE_MAT.side = THREE.DoubleSide;
 SURFACE_MAT.transparent = true;
 SURFACE_MAT.depthTest = true;
@@ -97,7 +98,7 @@ class Viewer {
 
         this.gui = new GUI();
 
-        this.seam = [0, 10, 110, 120];
+        this.seam = [];
 
         const guiStuff = {
             'Continue Simulation': () => { this?.sim?.updateSim(); },
@@ -120,7 +121,7 @@ class Viewer {
         this.gui.add(this, 'viewHandles').onChange(() => { this.toggleVisibility(this.viewHandles, this.viewIndices); });
         this.gui.add(this, 'viewIndices').onChange(() => { this.toggleVisibility(this.viewHandles, this.viewIndices); });
         this.gui.add(WIRE_MAT, 'wireframe').onChange(() => { this.render(); });
-        this.gui.add(SURFACE_MAT, 'opacity', 0, 1).onChange(() => { this.render(); })
+        this.gui.add(SURFACE_MAT, 'opacity', 0, 1).onChange(() => { SEAM_MAT.opacity = SURFACE_MAT.opacity; this.render(); })
         this.gui.add(guiStuff, 'Load Model');
         let folder = this.gui.addFolder('Plane');
         folder.add(guiStuff, 'Width', 1, 40, 1);
@@ -264,6 +265,12 @@ class Viewer {
         this.geometry?.dispose();
         this.geometry = geometry;
         this.geometry.computeVertexNormals();
+
+        this.seamGeometry?.dispose();
+        this.seamGeometry = new THREE.BufferGeometry();
+        this.seamGeometry.setAttribute('position', geometry.getAttribute('position'));
+        this.seamGeometry.setIndex([]);
+
         this.scene.remove(this.surfaceMesh);
         this.scene.remove(this.wireMesh);
         this.scene.remove(this.seamMesh);
@@ -279,11 +286,6 @@ class Viewer {
 
         this.sim?.dispose();
         this.sim = new Simulation(geometry, (e) => { this.update_pos_batch(e); this.render(); }, thresh);
-
-        this.seamGeometry?.dispose();
-        this.seamGeometry = new THREE.BufferGeometry();
-        this.seamGeometry.setAttribute('position', geometry.getAttribute('position'));
-        this.seamGeometry.setIndex([]);
 
         this.resized();
         this.render();
